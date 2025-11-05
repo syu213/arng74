@@ -42,13 +42,13 @@ const Index = () => {
 
   if (activeView === "dashboard") {
     return (
-      <div className="min-h-screen bg-background" style={{ backgroundImage: 'var(--grid-pattern)' }}>
-        <header className="border-b-2 border-border bg-card/80 backdrop-blur-sm">
+      <div className="min-h-screen bg-background">
+        <header className="armor-panel border-b-2 border-border">
           <div className="container mx-auto px-4 py-4">
             <Button variant="ghost" onClick={() => setActiveView("home")} className="mb-2 hover:bg-muted">
               ← Back
             </Button>
-            <h1 className="text-xl font-bold text-foreground uppercase tracking-wider">Command Dashboard</h1>
+            <h1 className="font-military-heading text-xl text-primary">COMMAND DASHBOARD</h1>
           </div>
         </header>
         <main className="container mx-auto px-4 py-8">
@@ -59,17 +59,17 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background" style={{ backgroundImage: 'var(--grid-pattern)' }}>
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b-2 border-border bg-card/80 backdrop-blur-sm">
+      <header className="armor-panel border-b-2 border-border">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/20 border-2 border-primary/40 rounded">
+            <div className="military-patch p-3 border-2 border-primary/40">
               <Shield className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground uppercase tracking-wider">ARNG Hand Receipt Tracker</h1>
-              <p className="text-xs text-muted-foreground font-semibold">Equipment Management System</p>
+              <h1 className="font-military-stencil text-3xl text-primary">ARNG HAND RECEIPT TRACKER</h1>
+              <p className="font-tactical text-sm text-accent">EQUIPMENT MANAGEMENT SYSTEM</p>
             </div>
           </div>
         </div>
@@ -79,37 +79,37 @@ const Index = () => {
       <main className="container mx-auto px-4 py-12">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <div className="inline-block px-4 py-1 bg-accent/20 border border-accent/40 rounded-full text-accent text-xs font-bold uppercase tracking-wider mb-4">
-              Tactical Operations Ready
+            <div className="military-patch inline-block px-6 py-3 text-accent text-sm font-bold uppercase tracking-wider mb-8 border-2">
+              ★ TACTICAL OPERATIONS READY ★
             </div>
-            <h2 className="text-4xl font-bold text-foreground mb-4 uppercase tracking-tight">
-              End the Paper Chase
+            <h2 className="font-military-display text-6xl text-primary mb-8">
+              END THE PAPER CHASE
             </h2>
-            <p className="text-lg text-muted-foreground mb-2 font-medium">
-              Transform hours of causative research into seconds of search.
+            <p className="font-tactical text-xl text-foreground mb-4">
+              Transform hours of causative research into seconds of search
             </p>
-            <p className="text-sm text-muted-foreground">
-              Photo-based hand receipt logging with OCR extraction and digital audit trails.
+            <p className="font-tactical text-base text-muted-foreground">
+              Photo-based hand receipt logging with OCR extraction and digital audit trails
             </p>
           </div>
 
           {/* Quick Stats Bar */}
           <div className="grid grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
-            <div className="bg-card/60 border-2 border-border rounded p-4 text-center backdrop-blur-sm">
-              <p className="text-2xl font-bold text-primary">{receipts.length}</p>
-              <p className="text-xs text-muted-foreground font-semibold uppercase">Total Receipts</p>
+            <div className="military-card p-6 text-center">
+              <p className="font-military-heading text-3xl text-primary">{receipts.length}</p>
+              <p className="font-tactical text-sm text-muted-foreground">TOTAL RECEIPTS</p>
             </div>
-            <div className="bg-card/60 border-2 border-border rounded p-4 text-center backdrop-blur-sm">
-              <p className="text-2xl font-bold text-accent">
+            <div className="military-card p-6 text-center">
+              <p className="font-military-heading text-3xl text-accent">
                 {receipts.filter(r => new Date(r.timestamp).getMonth() === new Date().getMonth()).length}
               </p>
-              <p className="text-xs text-muted-foreground font-semibold uppercase">This Month</p>
+              <p className="font-tactical text-sm text-muted-foreground">THIS MONTH</p>
             </div>
-            <div className="bg-card/60 border-2 border-border rounded p-4 text-center backdrop-blur-sm">
-              <p className="text-2xl font-bold text-foreground">
+            <div className="military-card p-6 text-center">
+              <p className="font-military-heading text-3xl text-foreground">
                 {new Set(receipts.map(r => r.category)).size}
               </p>
-              <p className="text-xs text-muted-foreground font-semibold uppercase">Categories</p>
+              <p className="font-tactical text-sm text-muted-foreground">CATEGORIES</p>
             </div>
           </div>
 
@@ -117,47 +117,47 @@ const Index = () => {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
             <Button
               size="lg"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wider border-2 border-primary/40 shadow-[var(--shadow-tactical)] h-auto py-6"
+              className="tactical-button h-auto py-6"
               onClick={() => setActiveView("capture")}
             >
-              <Camera className="mr-2 h-6 w-6" />
+              <Camera className="mr-3 h-6 w-6" />
               <div className="text-left">
-                <div>New Receipt</div>
-                <div className="text-xs opacity-80 font-normal normal-case">Photo capture</div>
+                <div className="font-military-stencil text-base">NEW RECEIPT</div>
+                <div className="font-tactical text-sm opacity-80">PHOTO CAPTURE</div>
               </div>
             </Button>
 
             <Button
               size="lg"
               variant="outline"
-              className="border-2 font-bold uppercase tracking-wider shadow-[var(--shadow-tactical)] h-auto py-6 hover:bg-muted/50"
+              className="military-card border-2 h-auto py-6 hover:bg-muted/50 font-tactical"
               onClick={() => setActiveView("ledger")}
               disabled={receipts.length === 0}
             >
-              <FileSpreadsheet className="mr-2 h-6 w-6" />
+              <FileSpreadsheet className="mr-3 h-6 w-6" />
               <div className="text-left">
-                <div>Ledger</div>
-                <div className="text-xs opacity-80 font-normal normal-case">{receipts.length} entries</div>
+                <div className="font-military-stencil text-base">LEDGER</div>
+                <div className="font-tactical text-sm opacity-80">{receipts.length} ENTRIES</div>
               </div>
             </Button>
 
             <Button
               size="lg"
               variant="outline"
-              className="border-2 font-bold uppercase tracking-wider shadow-[var(--shadow-tactical)] h-auto py-6 hover:bg-muted/50"
+              className="military-card border-2 h-auto py-6 hover:bg-muted/50 font-tactical"
               onClick={() => setActiveView("dashboard")}
               disabled={receipts.length === 0}
             >
-              <LayoutDashboard className="mr-2 h-6 w-6" />
+              <LayoutDashboard className="mr-3 h-6 w-6" />
               <div className="text-left">
-                <div>Dashboard</div>
-                <div className="text-xs opacity-80 font-normal normal-case">Analytics</div>
+                <div className="font-military-stencil text-base">DASHBOARD</div>
+                <div className="font-tactical text-sm opacity-80">ANALYTICS</div>
               </div>
             </Button>
 
             <Button
               size="lg"
-              className="bg-accent hover:bg-accent/90 text-accent-foreground font-bold uppercase tracking-wider border-2 border-accent/40 shadow-[var(--shadow-tactical)] h-auto py-6"
+              className="military-patch h-auto py-6 font-tactical"
               onClick={() => {
                 if (receipts.length === 0) return;
                 const csvContent = [
@@ -186,37 +186,37 @@ const Index = () => {
               }}
               disabled={receipts.length === 0}
             >
-              <FileSpreadsheet className="mr-2 h-6 w-6" />
+              <FileSpreadsheet className="mr-3 h-6 w-6" />
               <div className="text-left">
-                <div>Export CSV</div>
-                <div className="text-xs opacity-80 font-normal normal-case">Quick download</div>
+                <div className="font-military-stencil text-base">EXPORT CSV</div>
+                <div className="font-tactical text-sm opacity-80">QUICK DOWNLOAD</div>
               </div>
             </Button>
           </div>
 
           {/* Info Banner */}
-          <div className="bg-card/60 border-2 border-border rounded p-6 backdrop-blur-sm shadow-[var(--shadow-tactical)]">
-            <h4 className="font-bold text-foreground mb-3 uppercase tracking-wider text-sm">Mission Brief</h4>
-            <ol className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex gap-2">
-                <span className="text-primary font-bold">01.</span>
-                <span><strong className="text-foreground">Capture:</strong> Take a photo of your completed hand receipt (DA 2062)</span>
+          <div className="armor-panel p-8">
+            <h4 className="font-military-stencil text-primary mb-6 text-base">★ MISSION BRIEF ★</h4>
+            <ol className="space-y-4 font-tactical text-base text-muted-foreground">
+              <li className="flex gap-4">
+                <span className="font-military-heading text-primary text-lg">01.</span>
+                <span><strong className="text-foreground">CAPTURE:</strong> Take a photo of your completed hand receipt (DA 2062)</span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold">02.</span>
-                <span><strong className="text-foreground">Extract:</strong> OCR scans for item name, borrower, and date automatically</span>
+              <li className="flex gap-4">
+                <span className="font-military-heading text-primary text-lg">02.</span>
+                <span><strong className="text-foreground">EXTRACT:</strong> OCR scans for item name, borrower, and date automatically</span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold">03.</span>
-                <span><strong className="text-foreground">Verify:</strong> Review and edit extracted data, add serial numbers and notes</span>
+              <li className="flex gap-4">
+                <span className="font-military-heading text-primary text-lg">03.</span>
+                <span><strong className="text-foreground">VERIFY:</strong> Review and edit extracted data, add serial numbers and notes</span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold">04.</span>
-                <span><strong className="text-foreground">Log:</strong> Creates an immutable digital record with photo backup</span>
+              <li className="flex gap-4">
+                <span className="font-military-heading text-primary text-lg">04.</span>
+                <span><strong className="text-foreground">LOG:</strong> Creates an immutable digital record with photo backup</span>
               </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold">05.</span>
-                <span><strong className="text-foreground">Deploy:</strong> Search, filter, and export CSV for PBOs and investigations</span>
+              <li className="flex gap-4">
+                <span className="font-military-heading text-primary text-lg">05.</span>
+                <span><strong className="text-foreground">DEPLOY:</strong> Search, filter, and export CSV for PBOs and investigations</span>
               </li>
             </ol>
           </div>
@@ -224,9 +224,9 @@ const Index = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t-2 border-border mt-16 py-6 bg-card/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground font-semibold">
-          <p className="uppercase tracking-wider">ARNG Hand Receipt Tracker • Operation Checkpoint • Equipment Management System</p>
+      <footer className="armor-panel border-t-2 border-border mt-16 py-6">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          <p className="font-military-stencil text-primary">ARNG HAND RECEIPT TRACKER • OPERATION CHECKPOINT • EQUIPMENT MANAGEMENT SYSTEM</p>
         </div>
       </footer>
     </div>
