@@ -53,15 +53,22 @@ export class GeminiOCRService {
       // Convert image to base64 and send as JSON (more reliable than multipart)
       const base64Image = await this.fileToBase64(imageFile);
 
+      const requestData = {
+        image: base64Image.split(',')[1], // Remove data:image/jpeg;base64, prefix
+        mimeType: imageFile.type,
+      };
+
+      console.log('📤 Sending request data:', {
+        imageLength: requestData.image.length,
+        mimeType: requestData.mimeType,
+      });
+
       const response = await fetch('/api/gemini-ocr', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          image: base64Image.split(',')[1], // Remove data:image/jpeg;base64, prefix
-          mimeType: imageFile.type,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       console.log('📡 Server response status:', response.status);

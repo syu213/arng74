@@ -31,9 +31,26 @@ export default async function handler(req, res) {
     let imageData;
 
     try {
+      console.log('📄 Raw request body type:', typeof req.body);
+      console.log('📄 Raw request body:', req.body ? 'exists' : 'null');
+
       // Try to parse as JSON first (in case the data is sent as JSON)
       if (req.headers['content-type']?.includes('application/json')) {
-        const body = JSON.parse(req.body);
+        let body;
+
+        // Handle different ways Vercel might provide the body
+        if (typeof req.body === 'string') {
+          body = JSON.parse(req.body);
+        } else if (req.body && typeof req.body === 'object') {
+          body = req.body;
+        } else {
+          throw new Error('Invalid request body format');
+        }
+
+        console.log('✅ Parsed JSON body, keys:', Object.keys(body));
+        console.log('📸 Image data present:', !!body.image);
+        console.log('📸 MIME type:', body.mimeType);
+
         imageData = {
           base64: body.image,
           mimeType: body.mimeType || 'image/jpeg'
@@ -45,7 +62,8 @@ export default async function handler(req, res) {
       }
     } catch (parseError) {
       console.error('❌ Parse error:', parseError);
-      return res.status(400).json({ error: 'Failed to parse request data' });
+      console.error('❌ Parse error stack:', parseError.stack);
+      return res.status(400).json({ error: `Failed to parse request data: ${parseError.message}` });
     }
 
     if (!imageData || !imageData.base64) {
