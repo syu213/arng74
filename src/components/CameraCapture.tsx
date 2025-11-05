@@ -46,6 +46,7 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
 
         // Show video once and for all
         const showVideo = () => {
+          if (isStreaming) return; // Prevent multiple calls
           console.log('📺 Showing video');
           setIsStreaming(true);
 
@@ -59,11 +60,23 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
         };
 
         // Set up single event listeners
-        videoRef.current.onloadedmetadata = showVideo;
-        videoRef.current.oncanplay = showVideo;
+        videoRef.current.onloadedmetadata = () => {
+          console.log('📺 Video metadata loaded');
+          setTimeout(showVideo, 100); // Small delay to ensure video is ready
+        };
 
-        // Show after a short delay
-        setTimeout(showVideo, 100);
+        videoRef.current.oncanplay = () => {
+          console.log('📺 Video can play');
+          setTimeout(showVideo, 50); // Small delay to ensure video is ready
+        };
+
+        // Fallback timeout
+        setTimeout(() => {
+          if (!isStreaming && videoRef.current && videoRef.current.readyState >= 2) {
+            console.log('📺 Using fallback timeout to show video');
+            showVideo();
+          }
+        }, 1000);
 
         console.log('Camera setup complete');
       } else {
@@ -162,10 +175,10 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
   }, [facingMode, startCamera, stopCamera]);
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      <div className="bg-card border-b border-border p-4">
-        <div className="flex justify-between items-center">
-          <Button variant="ghost" onClick={onClose} className="text-primary-foreground">
+    <div className="fixed inset-0 bg-black/95 z-[9999] flex flex-col backdrop-blur-sm">
+      <div className="bg-card border-b border-border p-4 shadow-lg">
+        <div className="flex justify-between items-center max-w-4xl mx-auto">
+          <Button variant="ghost" onClick={onClose} className="text-primary-foreground hover:bg-card/80">
             <CameraOff className="mr-2 h-4 w-4" />
             Close Camera
           </Button>
@@ -173,14 +186,16 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
             <Button
               variant="outline"
               onClick={downloadPhoto}
-              className="border-primary text-primary-foreground"
+              className="border-primary text-primary-foreground hover:bg-card/80"
+              size="sm"
             >
               <Download className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               onClick={switchCamera}
-              className="border-primary text-primary-foreground"
+              className="border-primary text-primary-foreground hover:bg-card/80"
+              size="sm"
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -188,21 +203,25 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
         </div>
       </div>
 
-      <div className="flex-1 relative flex items-center justify-center">
+      <div className="flex-1 relative flex items-center justify-center max-w-4xl mx-auto w-full p-4">
         {/* Always render video element so ref is available */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover ${!isStreaming ? 'hidden' : ''}`}
-          style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
-        />
-        <canvas ref={canvasRef} className="hidden" />
+        <div className="relative w-full h-full max-h-[60vh] rounded-lg overflow-hidden bg-black">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-contain transition-opacity duration-300 ${
+              isStreaming ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+          />
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
 
         {/* Show loading overlay when not streaming */}
         {!isStreaming && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
+          <div className="absolute inset-0 flex items-center justify-center bg-black rounded-lg">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
               <p className="text-primary-foreground">Initializing camera...</p>
@@ -220,8 +239,8 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
 
         {/* Camera overlay effects when streaming */}
         {isStreaming && (
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 border-4 border-primary/20"></div>
+          <div className="absolute inset-0 pointer-events-none rounded-lg">
+            <div className="absolute inset-0 border-4 border-primary/20 rounded-lg"></div>
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
               <div className="w-64 h-48 border-2 border-primary rounded-lg"></div>
             </div>
@@ -229,20 +248,26 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
         )}
       </div>
 
-      <div className="bg-card border-t border-border p-4">
-        <div className="flex justify-center">
+      <div className="bg-card border-t border-border p-4 shadow-lg">
+        <div className="flex justify-center max-w-4xl mx-auto">
           <Button
             onClick={capturePhoto}
             disabled={!isStreaming}
             size="lg"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4"
+            className={`bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 transition-all duration-200 ${
+              isStreaming
+                ? 'opacity-100 transform scale-100'
+                : 'opacity-50 transform scale-95 cursor-not-allowed'
+            }`}
           >
             <Camera className="mr-2 h-6 w-6" />
-            Capture Photo
+            {isStreaming ? 'Capture Photo' : 'Initializing...'}
           </Button>
         </div>
-        <p className="text-center text-muted-foreground text-sm mt-2">
-          Position the hand receipt within the frame
+        <p className="text-center text-muted-foreground text-sm mt-2 max-w-4xl mx-auto">
+          {isStreaming
+            ? 'Position the hand receipt within the frame'
+            : 'Waiting for camera to initialize...'}
         </p>
       </div>
     </div>
