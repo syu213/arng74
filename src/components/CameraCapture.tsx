@@ -202,28 +202,42 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
 
         {/* Show loading overlay when not streaming */}
         {!isStreaming && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black">
+          <div className="absolute inset-0 flex items-center justify-center bg-black" style={{ zIndex: 10 }}>
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-primary-foreground">Initializing camera...</p>
-              <p className="text-primary-foreground text-sm mt-2">
-                Debug: facingMode={facingMode}, isStreaming={String(isStreaming)}
-              </p>
-              {videoRef.current && (
-                <p className="text-primary-foreground text-xs mt-1">
-                  Video element ready
-                </p>
-              )}
+              <p className="text-white">Initializing camera...</p>
             </div>
+          </div>
+        )}
+
+        {/* Capture button overlay - always accessible when streaming */}
+        {isStreaming && (
+          <div
+            className="absolute bottom-4 left-0 right-0 flex justify-center"
+            style={{ zIndex: 20 }}
+          >
+            <Button
+              onClick={capturePhoto}
+              size="lg"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 font-bold"
+              style={{
+                minWidth: '200px',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+                border: '2px solid #1e40af'
+              }}
+            >
+              <Camera className="mr-2 h-6 w-6" />
+              Capture Photo
+            </Button>
           </div>
         )}
 
         {/* Camera overlay effects when streaming */}
         {isStreaming && (
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 border-4 border-primary/20"></div>
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
+            <div className="absolute inset-0 border-4 border-blue-400/30"></div>
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-              <div className="w-64 h-48 border-2 border-primary rounded-lg"></div>
+              <div className="w-64 h-48 border-2 border-blue-400 rounded-lg"></div>
             </div>
           </div>
         )}
