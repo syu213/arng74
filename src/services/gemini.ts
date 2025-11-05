@@ -49,28 +49,37 @@ export class GeminiOCRService {
   private async callServerFunction(imageFile: File): Promise<ExtractedData> {
     console.log('📡 Sending image to Vercel serverless function...');
 
-    // Create FormData to send the image to our API route
-    const formData = new FormData();
-    formData.append('image', imageFile);
+    try {
+      // Convert image to base64 and send as JSON (more reliable than multipart)
+      const base64Image = await this.fileToBase64(imageFile);
 
-    // Call our serverless function
-    const response = await fetch('/api/gemini-ocr', {
-      method: 'POST',
-      body: formData,
-    });
+      const response = await fetch('/api/gemini-ocr', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: base64Image.split(',')[1], // Remove data:image/jpeg;base64, prefix
+          mimeType: imageFile.type,
+        }),
+      });
 
-    console.log('📡 Server response status:', response.status);
+      console.log('📡 Server response status:', response.status);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Server error:', errorText);
-      throw new Error(`Server error: ${response.status} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Server error:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      const extractedData: ExtractedData = await response.json();
+      console.log('✅ Successfully extracted data:', extractedData);
+
+      return extractedData;
+    } catch (error) {
+      console.error('❌ Server function call failed:', error);
+      throw error;
     }
-
-    const extractedData: ExtractedData = await response.json();
-    console.log('✅ Successfully extracted data:', extractedData);
-
-    return extractedData;
   }
 
   private async callGeminiDirectly(imageFile: File, apiKey: string): Promise<ExtractedData> {

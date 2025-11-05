@@ -1,47 +1,61 @@
-const fs = require('fs');
-
 export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    console.log('🚀 Vercel serverless function invoked');
+    console.log('📋 Request headers:', Object.keys(req.headers));
+    console.log('📋 Content type:', req.headers['content-type']);
+
     // Check if GEMINI_API_KEY is available
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error('GEMINI_API_KEY not found in environment variables');
+      console.error('❌ GEMINI_API_KEY not found in environment variables');
       return res.status(500).json({ error: 'API key not configured' });
     }
+    console.log('✅ API key found, length:', apiKey.length);
 
-    // Parse multipart form data
-    const chunks = [];
-    let boundary;
+    // For Vercel, we need to handle the request differently
+    let imageData;
 
-    // Get boundary from content type
-    const contentType = req.headers['content-type'];
-    if (contentType && contentType.includes('multipart/form-data')) {
-      const boundaryMatch = contentType.match(/boundary=(.+)$/);
-      boundary = boundaryMatch ? boundaryMatch[1] : null;
+    try {
+      // Try to parse as JSON first (in case the data is sent as JSON)
+      if (req.headers['content-type']?.includes('application/json')) {
+        const body = JSON.parse(req.body);
+        imageData = {
+          base64: body.image,
+          mimeType: body.mimeType || 'image/jpeg'
+        };
+      } else {
+        // Parse multipart form data
+        console.log('📸 Parsing multipart form data...');
+        imageData = await parseMultipartDataVercel(req);
+      }
+    } catch (parseError) {
+      console.error('❌ Parse error:', parseError);
+      return res.status(400).json({ error: 'Failed to parse request data' });
     }
 
-    if (!boundary) {
-      return res.status(400).json({ error: 'Invalid multipart form data' });
-    }
-
-    // Read the request body
-    for await (const chunk of req) {
-      chunks.push(chunk);
-    }
-
-    const data = Buffer.concat(chunks);
-
-    // Parse the multipart data to extract the image
-    const imageData = parseMultipartData(data, boundary);
-
-    if (!imageData) {
+    if (!imageData || !imageData.base64) {
+      console.error('❌ No image data found');
       return res.status(400).json({ error: 'No image file provided' });
     }
+
+    console.log('✅ Image data parsed successfully');
+    console.log('📊 Image MIME type:', imageData.mimeType);
+    console.log('📏 Image data size:', imageData.base64.length);
 
     const prompt = `
 You are analyzing a U.S. Army National Guard hand receipt form (DA 2062) for equipment accountability.
@@ -176,52 +190,73 @@ Carefully analyze all text, numbers, and form fields in the image.
       notes: jsonData.notes || ''
     };
 
+    console.log('✅ Extraction complete, sending response');
     return res.status(200).json(extractedData);
 
   } catch (error) {
-    console.error('Vercel serverless function error:', error);
+    console.error('❌ Vercel serverless function error:', error);
+    console.error('❌ Error stack:', error.stack);
     return res.status(500).json({
       error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     });
   }
 }
 
-function parseMultipartData(data, boundary) {
-  const boundaryBuffer = Buffer.from(`--${boundary}`);
-  const parts = data.split(boundaryBuffer);
+// Simplified multipart parser for Vercel
+async function parseMultipartDataVercel(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      try {
+        const data = Buffer.concat(chunks);
+        const contentType = req.headers['content-type'];
+        const boundaryMatch = contentType.match(/boundary=(.+)$/);
+        const boundary = boundaryMatch ? boundaryMatch[1] : null;
 
-  for (const part of parts) {
-    if (part.includes('Content-Disposition: form-data') && part.includes('name="image"')) {
-      const lines = part.split('\r\n');
-
-      // Find the content type
-      let mimeType = 'image/jpeg'; // default
-      const contentTypeLine = lines.find(line => line.toLowerCase().includes('content-type'));
-      if (contentTypeLine) {
-        const match = contentTypeLine.match(/content-type:\s*(.+)/i);
-        if (match) {
-          mimeType = match[1].trim();
+        if (!boundary) {
+          return reject(new Error('No boundary found'));
         }
-      }
 
-      // Find the actual image data (after the empty line)
-      const emptyLineIndex = lines.findIndex(line => line === '');
-      if (emptyLineIndex !== -1 && emptyLineIndex < lines.length - 1) {
-        const imageData = lines.slice(emptyLineIndex + 1, -1).join('\r\n');
-        // Remove trailing boundary markers if present
-        const cleanData = imageData.replace(/\r\n$/, '').replace(/--\r\n?$/, '');
+        const boundaryBuffer = Buffer.from(`--${boundary}`);
+        const parts = data.toString().split(boundaryBuffer.toString());
 
-        if (cleanData.length > 0) {
-          return {
-            mimeType,
-            base64: Buffer.from(cleanData, 'binary').toString('base64')
-          };
+        for (const part of parts) {
+          if (part.includes('Content-Disposition: form-data') && part.includes('name="image"')) {
+            const lines = part.split('\r\n');
+
+            // Find the content type
+            let mimeType = 'image/jpeg';
+            const contentTypeLine = lines.find(line => line.toLowerCase().includes('content-type'));
+            if (contentTypeLine) {
+              const match = contentTypeLine.match(/content-type:\s*(.+)/i);
+              if (match) {
+                mimeType = match[1].trim();
+              }
+            }
+
+            // Find the actual image data
+            const emptyLineIndex = lines.findIndex(line => line === '');
+            if (emptyLineIndex !== -1 && emptyLineIndex < lines.length - 1) {
+              const imageData = lines.slice(emptyLineIndex + 1, -1).join('\r\n');
+              const cleanData = imageData.replace(/\r\n$/, '').replace(/--\r\n?$/, '');
+
+              if (cleanData.length > 0) {
+                return resolve({
+                  mimeType,
+                  base64: Buffer.from(cleanData, 'binary').toString('base64')
+                });
+              }
+            }
+          }
         }
-      }
-    }
-  }
 
-  return null;
+        reject(new Error('No image data found in multipart data'));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
 }
 
 function parseJsonResponse(text) {
