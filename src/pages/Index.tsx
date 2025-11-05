@@ -69,7 +69,7 @@ const Index = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground uppercase tracking-wider">ARNG Hand Receipt Tracker</h1>
-              <p className="text-xs text-muted-foreground font-semibold">DIGITAL CAUSATIVE RESEARCH TOOL</p>
+              <p className="text-xs text-muted-foreground font-semibold">Equipment Management System</p>
             </div>
           </div>
         </div>
@@ -226,7 +226,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t-2 border-border mt-16 py-6 bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground font-semibold">
-          <p className="uppercase tracking-wider">ARNG Hand Receipt Tracker MVP • No-Cost Standalone Solution • No GCSS-Army Integration Required</p>
+          <p className="uppercase tracking-wider">ARNG Hand Receipt Tracker • Operation Checkpoint • Equipment Management System</p>
         </div>
       </footer>
     </div>

@@ -14,7 +14,8 @@ import {
 import { Camera, Upload, ArrowLeft, Loader2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Receipt, RECEIPT_CATEGORIES } from "@/types/receipt";
-import Tesseract from "tesseract.js";
+import { CameraCapture } from "./CameraCapture";
+import { geminiOCRService } from "@/services/gemini";
 
 interface CaptureReceiptProps {
   onCancel: () => void;
@@ -24,6 +25,7 @@ interface CaptureReceiptProps {
 export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState({
     itemName: "",
@@ -35,11 +37,10 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
     notes: "",
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const processImage = async (file: File) => {
     setIsProcessing(true);
-    
+
     // Create preview
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -48,61 +49,66 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
     reader.readAsDataURL(file);
 
     try {
-      // Perform OCR
-      const result = await Tesseract.recognize(file, "eng", {
-        logger: (m) => console.log(m),
-      });
-
-      const text = result.data.text;
-      console.log("OCR Result:", text);
-
-      // Simple extraction logic (can be improved with better patterns)
-      const lines = text.split("\n").filter((line) => line.trim());
-      
-      // Try to extract item name (often appears near "ITEM" or "DESCRIPTION")
-      const itemMatch = lines.find(line => 
-        line.toLowerCase().includes("item") || 
-        line.toLowerCase().includes("description") ||
-        line.toLowerCase().includes("property")
-      );
-      
-      // Try to extract name (often appears near "NAME" or after "TO:")
-      const nameMatch = lines.find(line => 
-        line.toLowerCase().includes("name") || 
-        line.toLowerCase().includes("to:") ||
-        line.toLowerCase().includes("borrower")
-      );
-      
-      // Try to extract date (look for date patterns)
-      const dateMatch = lines.find(line => 
-        /\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}/.test(line) ||
-        line.toLowerCase().includes("date")
-      );
+      // Perform OCR with Gemini API
+      const extractedData = await geminiOCRService.extractDataFromImage(file);
+      console.log("Gemini OCR Result:", extractedData);
 
       setExtractedData({
-        itemName: itemMatch ? itemMatch.replace(/item|description|property/gi, "").trim() : "",
-        borrowerName: nameMatch ? nameMatch.replace(/name|to:|borrower/gi, "").trim() : "",
-        date: dateMatch ? dateMatch.match(/\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}/)?.[0] || "" : "",
+        itemName: extractedData.itemName || "",
+        borrowerName: extractedData.borrowerName || "",
+        date: extractedData.date || "",
+        serialNumber: extractedData.serialNumber || "",
+        category: (extractedData.category as Receipt["category"]) || "Other",
+        condition: extractedData.condition || "",
+        notes: extractedData.notes || "",
+      });
+
+      toast({
+        title: "AI OCR Complete",
+        description: "Data extracted using Gemini AI. Please review and edit.",
+      });
+    } catch (error) {
+      console.error("Gemini OCR Error:", error);
+      toast({
+        title: "AI OCR Failed",
+        description: error instanceof Error ? error.message : "Could not extract data. Please enter manually.",
+        variant: "destructive",
+      });
+
+      // Reset to empty state on error
+      setExtractedData({
+        itemName: "",
+        borrowerName: "",
+        date: "",
         serialNumber: "",
         category: "Other" as Receipt["category"],
         condition: "",
         notes: "",
       });
-
-      toast({
-        title: "OCR Complete",
-        description: "Please review and edit the extracted data.",
-      });
-    } catch (error) {
-      console.error("OCR Error:", error);
-      toast({
-        title: "OCR Failed",
-        description: "Could not extract data. Please enter manually.",
-        variant: "destructive",
-      });
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCameraCapture = (photoUrl: string) => {
+    setPhotoPreview(photoUrl);
+    setShowCamera(false);
+
+    // Convert blob URL to File for processing
+    fetch(photoUrl)
+      .then(res => res.blob())
+      .then(blob => {
+        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+        processImage(file);
+      })
+      .catch(error => {
+        console.error('Error converting camera capture to file:', error);
+        toast({
+          title: "Camera Error",
+          description: "Failed to process camera capture. Please try again.",
+          variant: "destructive",
+        });
+      });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,28 +177,20 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
           {!photoPreview ? (
             <div className="space-y-4">
               <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
                 className="hidden"
               />
-              
+
               <Button
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => setShowCamera(true)}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 size="lg"
               >
                 <Camera className="mr-2 h-5 w-5" />
-                Take Photo
+                Open Camera (AI Enhanced)
               </Button>
               
               <Button
@@ -236,7 +234,7 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
           {isProcessing && (
             <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Processing with OCR...</span>
+              <span>Processing with Gemini AI OCR...</span>
             </div>
           )}
         </Card>
@@ -346,6 +344,14 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
           </Card>
         )}
       </main>
+
+      {/* Camera Capture Modal */}
+      {showCamera && (
+        <CameraCapture
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
     </div>
   );
 };
