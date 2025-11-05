@@ -18,14 +18,11 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
   const startCamera = useCallback(async () => {
     // Prevent multiple camera instances
     if (streamRef.current) {
-      console.log('🛑 Camera already running, stopping first');
       stopCamera();
       return;
     }
 
     try {
-      console.log('🎥 Starting camera with facing mode:', facingMode);
-
       // Simple constraints that work on most devices
       const constraints = {
         video: {
@@ -35,52 +32,40 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
         }
       };
 
-      console.log('Requesting camera with constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('Camera stream obtained');
 
       if (videoRef.current) {
-        console.log('✅ Setting video srcObject');
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
 
         // Show video once and for all
         const showVideo = () => {
           if (isStreaming) return; // Prevent multiple calls
-          console.log('📺 Showing video');
           setIsStreaming(true);
 
           if (videoRef.current) {
-            videoRef.current.play().then(() => {
-              console.log('✅ Video playing successfully');
-            }).catch(err => {
-              console.log('⚠️ Video play failed, but continuing');
+            videoRef.current.play().catch(() => {
+              // Video play failed, but continue
             });
           }
         };
 
         // Set up single event listeners
         videoRef.current.onloadedmetadata = () => {
-          console.log('📺 Video metadata loaded');
           setTimeout(showVideo, 100); // Small delay to ensure video is ready
         };
 
         videoRef.current.oncanplay = () => {
-          console.log('📺 Video can play');
           setTimeout(showVideo, 50); // Small delay to ensure video is ready
         };
 
         // Fallback timeout
         setTimeout(() => {
           if (!isStreaming && videoRef.current && videoRef.current.readyState >= 2) {
-            console.log('📺 Using fallback timeout to show video');
             showVideo();
           }
         }, 1000);
-
-        console.log('Camera setup complete');
       } else {
-        console.error('❌ videoRef.current is null!');
         alert('Video element not found. Please refresh the page and try again.');
       }
     } catch (error) {
@@ -121,7 +106,6 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
   }, [onCapture, stopCamera]);
 
   const switchCamera = useCallback(async () => {
-    console.log('Switching camera from', facingMode, 'to', facingMode === 'user' ? 'environment' : 'user');
     stopCamera();
     setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   }, [stopCamera, facingMode]);
@@ -155,7 +139,6 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
     // Start camera once after component mount
     const timer = setTimeout(() => {
       if (videoRef.current && !streamRef.current) {
-        console.log('🎬 Starting camera after component mount');
         startCamera();
       }
     }, 100);
@@ -224,15 +207,10 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
           <div className="absolute inset-0 flex items-center justify-center bg-black rounded-lg">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-primary-foreground">Initializing camera...</p>
-              <p className="text-primary-foreground text-sm mt-2">
-                Debug: facingMode={facingMode}, isStreaming={String(isStreaming)}
+              <p className="text-primary-foreground text-lg font-medium">Initializing camera...</p>
+              <p className="text-primary-foreground/70 text-sm mt-2">
+                Please allow camera access when prompted
               </p>
-              {videoRef.current && (
-                <p className="text-primary-foreground text-xs mt-1">
-                  Video element ready
-                </p>
-              )}
             </div>
           </div>
         )}
