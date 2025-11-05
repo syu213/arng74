@@ -138,9 +138,60 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
       }
     }, 100);
 
+    // Force creation of capture button in DOM after mount
+    const createCaptureButton = () => {
+      // Remove any existing capture buttons
+      const existingButtons = document.querySelectorAll('[data-capture-button]');
+      existingButtons.forEach(btn => btn.remove());
+
+      // Create new capture button with raw DOM
+      const button = document.createElement('button');
+      button.setAttribute('data-capture-button', 'true');
+      button.innerHTML = isStreaming ? '📸 Capture Photo' : '📸 Camera Loading...';
+      button.disabled = !isStreaming;
+      button.onclick = (e) => {
+        if (isStreaming) {
+          capturePhoto();
+        }
+      };
+
+      // Force styles with !important
+      button.style.cssText = `
+        position: fixed !important;
+        bottom: 20px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        background-color: ${isStreaming ? '#dc2626' : '#666'} !important;
+        color: white !important;
+        padding: 16px 32px !important;
+        font-size: 20px !important;
+        font-weight: bold !important;
+        border-radius: 12px !important;
+        border: 3px solid #991b1b !important;
+        cursor: ${isStreaming ? 'pointer' : 'not-allowed'} !important;
+        z-index: 999999 !important;
+        min-width: 300px !important;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8) !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      `;
+
+      document.body.appendChild(button);
+      console.log('✅ Capture button forcefully added to DOM, streaming:', isStreaming);
+    };
+
+    // Create button immediately and then again after delay
+    createCaptureButton();
+    setTimeout(createCaptureButton, 500);
+    setTimeout(createCaptureButton, 1000);
+
     return () => {
       clearTimeout(timer);
       stopCamera();
+      // Clean up any DOM buttons
+      const buttons = document.querySelectorAll('[data-capture-button]');
+      buttons.forEach(btn => btn.remove());
     };
   }, []);
 
@@ -150,6 +201,26 @@ export const CameraCapture = ({ onCapture, onClose }: CameraCaptureProps) => {
       setTimeout(startCamera, 100);
     }
   }, [facingMode, startCamera, stopCamera]);
+
+  // Update capture button when streaming state changes
+  useEffect(() => {
+    const updateButton = () => {
+      const existingButtons = document.querySelectorAll('[data-capture-button]');
+      existingButtons.forEach(btn => {
+        (btn as HTMLButtonElement).innerHTML = isStreaming ? '📸 Capture Photo' : '📸 Camera Loading...';
+        (btn as HTMLButtonElement).disabled = !isStreaming;
+        btn.setAttribute('style', btn.getAttribute('style')?.replace(/background-color: [^;]+;/,
+          `background-color: ${isStreaming ? '#dc2626' : '#666'} !important`) || '');
+        btn.setAttribute('style', btn.getAttribute('style')?.replace(/cursor: [^;]+;/,
+          `cursor: ${isStreaming ? 'pointer' : 'not-allowed'} !important`) || '');
+      });
+      console.log('🔄 Updated capture button, streaming:', isStreaming);
+    };
+
+    updateButton();
+    setTimeout(updateButton, 100);
+    setTimeout(updateButton, 500);
+  }, [isStreaming]);
 
   return (
     <div style={{
