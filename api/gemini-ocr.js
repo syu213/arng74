@@ -1,83 +1,47 @@
-import { Receipt } from "@/types/receipt";
+const fs = require('fs');
 
-interface ExtractedData {
-  itemName: string;
-  borrowerName: string;
-  date: string;
-  serialNumber?: string;
-  category?: string;
-  condition?: string;
-  notes?: string;
-}
-
-export class GeminiOCRService {
-  constructor() {
-    // Check if we're in production (Vercel) and need to use the server API
-    this.isProduction = import.meta.env.PROD;
+export default async function handler(req, res) {
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  private isProduction: boolean;
-
-  async extractDataFromImage(imageFile: File): Promise<ExtractedData> {
-    console.log('🤖 Processing image with Gemini OCR...');
-    console.log('📊 Image file type:', imageFile.type);
-    console.log('📏 Image size:', imageFile.size);
-    console.log('🏗️ Environment:', this.isProduction ? 'Production (Vercel)' : 'Development');
-
-    try {
-      if (this.isProduction) {
-        // In production, call Vercel serverless function
-        return await this.callServerFunction(imageFile);
-      } else {
-        // In development, try to use the API key directly (for testing)
-        // or fall back to server function if available
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-        if (apiKey) {
-          console.log('🔑 Using development API key');
-          return await this.callGeminiDirectly(imageFile, apiKey);
-        } else {
-          console.log('⚠️ No API key found, attempting server function...');
-          return await this.callServerFunction(imageFile);
-        }
-      }
-    } catch (error) {
-      console.error('Gemini OCR service error:', error);
-      throw new Error(`Failed to extract data with Gemini: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  private async callServerFunction(imageFile: File): Promise<ExtractedData> {
-    console.log('📡 Sending image to Vercel serverless function...');
-
-    // Create FormData to send the image to our API route
-    const formData = new FormData();
-    formData.append('image', imageFile);
-
-    // Call our serverless function
-    const response = await fetch('/api/gemini-ocr', {
-      method: 'POST',
-      body: formData,
-    });
-
-    console.log('📡 Server response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Server error:', errorText);
-      throw new Error(`Server error: ${response.status} - ${errorText}`);
+  try {
+    // Check if GEMINI_API_KEY is available
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY not found in environment variables');
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
-    const extractedData: ExtractedData = await response.json();
-    console.log('✅ Successfully extracted data:', extractedData);
+    // Parse multipart form data
+    const chunks = [];
+    let boundary;
 
-    return extractedData;
-  }
+    // Get boundary from content type
+    const contentType = req.headers['content-type'];
+    if (contentType && contentType.includes('multipart/form-data')) {
+      const boundaryMatch = contentType.match(/boundary=(.+)$/);
+      boundary = boundaryMatch ? boundaryMatch[1] : null;
+    }
 
-  private async callGeminiDirectly(imageFile: File, apiKey: string): Promise<ExtractedData> {
-    console.log('🔑 Calling Gemini API directly with API key...');
+    if (!boundary) {
+      return res.status(400).json({ error: 'Invalid multipart form data' });
+    }
 
-    // Convert image to base64
-    const base64Image = await this.fileToBase64(imageFile);
+    // Read the request body
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+
+    const data = Buffer.concat(chunks);
+
+    // Parse the multipart data to extract the image
+    const imageData = parseMultipartData(data, boundary);
+
+    if (!imageData) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
 
     const prompt = `
 You are analyzing a U.S. Army National Guard hand receipt form (DA 2062) for equipment accountability.
@@ -112,6 +76,8 @@ ANALYSIS GUIDELINES:
 Carefully analyze all text, numbers, and form fields in the image.
     `;
 
+    console.log('🤖 Calling Gemini API from Vercel serverless function...');
+
     // Try different model names
     const modelNames = [
       'gemini-2.5-flash',
@@ -121,7 +87,7 @@ Carefully analyze all text, numbers, and form fields in the image.
       'gemini-2.5-flash-preview-05-20'
     ];
 
-    let response: Response;
+    let response;
     let usedModel = '';
 
     for (const modelName of modelNames) {
@@ -143,8 +109,8 @@ Carefully analyze all text, numbers, and form fields in the image.
                     },
                     {
                       inline_data: {
-                        mime_type: imageFile.type,
-                        data: base64Image.split(',')[1]
+                        mime_type: imageData.mimeType,
+                        data: imageData.base64
                       }
                     }
                   ]
@@ -166,10 +132,11 @@ Carefully analyze all text, numbers, and form fields in the image.
       }
     }
 
-    // If no model worked, throw the last error
+    // If no model worked, return the last error
     if (!response || !response.ok) {
       const lastError = response ? await response.text() : 'No response';
-      throw new Error(`All Gemini models failed. Last error: ${lastError}`);
+      console.error('All Gemini models failed:', lastError);
+      return res.status(500).json({ error: `Failed to process image: ${lastError}` });
     }
 
     console.log(`✅ Successfully used model: ${usedModel}`);
@@ -178,11 +145,12 @@ Carefully analyze all text, numbers, and form fields in the image.
     const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!extractedText) {
-      throw new Error('No response from Gemini API');
+      console.error('No response from Gemini API');
+      return res.status(500).json({ error: 'No response from AI service' });
     }
 
     // Parse JSON response
-    const jsonData = this.parseJsonResponse(extractedText);
+    const jsonData = parseJsonResponse(extractedText);
 
     // Convert date from MM/DD/YYYY to YYYY-MM-DD format for HTML date input
     let formattedDate = jsonData.date || '';
@@ -198,7 +166,7 @@ Carefully analyze all text, numbers, and form fields in the image.
       }
     }
 
-    return {
+    const extractedData = {
       itemName: jsonData.itemName || '',
       borrowerName: jsonData.borrowerName || '',
       date: formattedDate,
@@ -207,30 +175,65 @@ Carefully analyze all text, numbers, and form fields in the image.
       condition: jsonData.condition || '',
       notes: jsonData.notes || ''
     };
-  }
 
-  private async fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+    return res.status(200).json(extractedData);
+
+  } catch (error) {
+    console.error('Vercel serverless function error:', error);
+    return res.status(500).json({
+      error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`
     });
-  }
-
-  private parseJsonResponse(text: string): any {
-    try {
-      // Try to parse as-is
-      return JSON.parse(text);
-    } catch {
-      // Try to extract JSON from text that might have markdown or extra content
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      throw new Error('Could not parse JSON response from Gemini');
-    }
   }
 }
 
-export const geminiOCRService = new GeminiOCRService();
+function parseMultipartData(data, boundary) {
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
+  const parts = data.split(boundaryBuffer);
+
+  for (const part of parts) {
+    if (part.includes('Content-Disposition: form-data') && part.includes('name="image"')) {
+      const lines = part.split('\r\n');
+
+      // Find the content type
+      let mimeType = 'image/jpeg'; // default
+      const contentTypeLine = lines.find(line => line.toLowerCase().includes('content-type'));
+      if (contentTypeLine) {
+        const match = contentTypeLine.match(/content-type:\s*(.+)/i);
+        if (match) {
+          mimeType = match[1].trim();
+        }
+      }
+
+      // Find the actual image data (after the empty line)
+      const emptyLineIndex = lines.findIndex(line => line === '');
+      if (emptyLineIndex !== -1 && emptyLineIndex < lines.length - 1) {
+        const imageData = lines.slice(emptyLineIndex + 1, -1).join('\r\n');
+        // Remove trailing boundary markers if present
+        const cleanData = imageData.replace(/\r\n$/, '').replace(/--\r\n?$/, '');
+
+        if (cleanData.length > 0) {
+          return {
+            mimeType,
+            base64: Buffer.from(cleanData, 'binary').toString('base64')
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseJsonResponse(text) {
+  try {
+    // Try to parse as-is
+    return JSON.parse(text);
+  } catch {
+    // Try to extract JSON from text that might have markdown or extra content
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Could not parse JSON response from Gemini');
+  }
+}
