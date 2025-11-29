@@ -96,19 +96,19 @@ export class GeminiOCRService {
     const base64Image = await this.fileToBase64(imageFile);
 
     const prompt = `
-You are analyzing a U.S. Army National Guard hand receipt form (DA 2062) for equipment accountability.
+You are analyzing a U.S. Army National Guard form (DA 2062, DA 3161, OCIE, or other military document) for equipment accountability.
 Carefully examine this form and extract the requested information in precise JSON format.
 
 Please identify and extract:
 1. The equipment/item being transferred
-2. The service member receiving the equipment
+2. The service member(s) and units involved - pay special attention to ranks and names
 3. Transaction details and identifiers
 
 Return ONLY a JSON object with these exact fields:
 
 {
   "itemName": "Complete equipment description including model numbers",
-  "borrowerName": "Full name of the borrower including rank if visible",
+  "borrowerName": "Full name of the person receiving equipment including rank (e.g., SGT Smith, PFC Johnson)",
   "date": "Transaction date in MM/DD/YYYY format",
   "serialNumber": "Serial number, NSN (National Stock Number), or unique identifier",
   "category": "Choose one: Weapons, Optics, Radios/Comms, PPE, Tools, Vehicles, Medical, Other",
@@ -116,16 +116,29 @@ Return ONLY a JSON object with these exact fields:
   "notes": "Additional remarks, quantities, or special instructions"
 }
 
+NAME EXTRACTION PRIORITY:
+- Look for "FROM:", "TO:", "RECEIVED BY:", "ISSUED TO:" fields
+- Extract complete names with military ranks: PVT, PV2, PFC, SPC, CPL, SGT, SSG, SFC, MSG, 1SG, SGM, LT, CPT, MAJ, LTC, COL
+- For DA 2062: Look in the "TO:" field and individual line item signatures
+- For DA 3161: Look in "REQUEST FROM:" and signature areas
+- For OCIE: Look in "NAME:" field and signature blocks
+- Include both rank and full name when visible (e.g., "SGT John Smith" not just "John Smith")
+- If multiple names are present, prioritize the person receiving the equipment
+
+MILITARY EQUIPMENT EXAMPLES:
+- Weapons: M4 Carbine, M16A4, M249 SAW, M240B, M2 HB, M320 GLM, M9 Beretta, M18 pistol
+- Optics: ACOG, M68 CCO, ELCAN, AN/PVS-14, AN/PVS-31, PEQ-15, PEQ-16
+- Radios: AN/PRC-152, AN/PRC-163, AN/PRC-148, SINCGARS, Harris Falcon
+- Vehicles: HMMWV (Humvee), JLTV, MRAP, LMTV, FMTV, M-ATV
+- PPE: IOTV, SAPI plates, ACH, ECH, helmet, body armor, gloves
+
 ANALYSIS GUIDELINES:
-- Look for military equipment: M4/M16 rifles, M249, M240, radios, night vision, body armor, vehicles, etc.
-- Identify ranks and names: SGT, PFC, CPL, SSG, etc.
 - Extract serial numbers and NSNs (typically 13-digit format like 1005-01-231-0001)
 - Find dates in various formats and convert to MM/DD/YYYY
-- NSNs indicate: 1st 4 digits = Federal Supply Class, next 2 digits = country code
 - For missing information, use empty string ""
 - Respond with JSON only - no explanations or markdown formatting
 
-Carefully analyze all text, numbers, and form fields in the image.
+Carefully analyze all text, form fields, headers, and signature blocks.
     `;
 
     // Try different model names

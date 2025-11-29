@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, Download, Search, Eye, Trash2, Filter } from "lucide-react";
-import { Receipt, RECEIPT_CATEGORIES } from "@/types/receipt";
+import { Receipt, FormType, FORM_TYPE_LABELS, RECEIPT_CATEGORIES } from "@/types/receipt";
 import {
   Dialog,
   DialogContent,
@@ -53,13 +53,65 @@ export const ReceiptLedger = ({ receipts, onBack, onDelete }: ReceiptLedgerProps
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const filteredReceipts = receipts.filter((receipt) => {
-    const matchesSearch =
-      receipt.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      receipt.borrowerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      receipt.date.includes(searchQuery) ||
-      receipt.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase());
+    // Search in notes (common field)
+    const matchesNotes = receipt.notes?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory = categoryFilter === "all" || receipt.category === categoryFilter;
+    // Form-specific search
+    let matchesFormData = false;
+    switch (receipt.formType) {
+      case 'Generic':
+        const genericData = receipt.data as any;
+        matchesFormData =
+          genericData.itemName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          genericData.borrowerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          genericData.date?.includes(searchQuery) ||
+          genericData.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          genericData.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          genericData.condition?.toLowerCase().includes(searchQuery.toLowerCase());
+        break;
+      case 'DA2062':
+        const da2062Data = receipt.data as any;
+        matchesFormData =
+          da2062Data.handReceiptNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da2062Data.from?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da2062Data.to?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da2062Data.items?.some((item: any) =>
+            item.stockNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.itemDescription?.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        break;
+      case 'DA3161':
+        const da3161Data = receipt.data as any;
+        matchesFormData =
+          da3161Data.requestNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da3161Data.voucherNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da3161Data.sendTo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da3161Data.requestFrom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da3161Data.dodAAC?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          da3161Data.items?.some((item: any) =>
+            item.stockNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.itemDescription?.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        break;
+      case 'OCIE':
+        const ocieData = receipt.data as any;
+        matchesFormData =
+          ocieData.soldierName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ocieData.rankGrade?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ocieData.ssnPid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ocieData.unit?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ocieData.cifCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ocieData.items?.some((item: any) =>
+            item.lin?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.size?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.nomenclature?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.nsn?.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        break;
+    }
+
+    const matchesSearch = matchesNotes || matchesFormData;
+    const matchesCategory = categoryFilter === "all" || receipt.formType === categoryFilter;
 
     return matchesSearch && matchesCategory;
   });
@@ -163,12 +215,19 @@ export const ReceiptLedger = ({ receipts, onBack, onDelete }: ReceiptLedgerProps
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {RECEIPT_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="all">All Forms & Categories</SelectItem>
+                  <SelectItem value="DA2062">DA Form 2062</SelectItem>
+                  <SelectItem value="DA3161">DA Form 3161</SelectItem>
+                  <SelectItem value="OCIE">OCIE Record</SelectItem>
+                  <SelectItem value="Generic">Generic Receipts</SelectItem>
+                  <SelectItem value="Weapons">Weapons</SelectItem>
+                  <SelectItem value="Optics">Optics</SelectItem>
+                  <SelectItem value="Radios/Comms">Radios/Comms</SelectItem>
+                  <SelectItem value="PPE">PPE</SelectItem>
+                  <SelectItem value="Tools">Tools</SelectItem>
+                  <SelectItem value="Vehicles">Vehicles</SelectItem>
+                  <SelectItem value="Medical">Medical</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -226,17 +285,64 @@ export const ReceiptLedger = ({ receipts, onBack, onDelete }: ReceiptLedgerProps
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
-                    <TableHead className="font-bold uppercase text-xs">Item Name</TableHead>
-                    <TableHead className="font-bold uppercase text-xs">Serial #</TableHead>
-                    <TableHead className="font-bold uppercase text-xs">Category</TableHead>
-                    <TableHead className="font-bold uppercase text-xs">Borrower</TableHead>
+                    <TableHead className="font-bold uppercase text-xs">Form Type</TableHead>
+                    <TableHead className="font-bold uppercase text-xs">Description</TableHead>
+                    <TableHead className="font-bold uppercase text-xs">Reference #</TableHead>
+                    <TableHead className="font-bold uppercase text-xs">Person/Unit</TableHead>
                     <TableHead className="font-bold uppercase text-xs">Date</TableHead>
-                    <TableHead className="font-bold uppercase text-xs">Condition</TableHead>
                     <TableHead className="text-right font-bold uppercase text-xs">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReceipts.map((receipt) => (
+                  {filteredReceipts.map((receipt) => {
+                    // Extract display data based on form type
+                    let displayInfo = {
+                      description: '',
+                      reference: '',
+                      person: '',
+                      date: ''
+                    };
+
+                    switch (receipt.formType) {
+                      case 'Generic':
+                        const genericData = receipt.data as any;
+                        displayInfo = {
+                          description: genericData.itemName || '',
+                          reference: genericData.serialNumber || '',
+                          person: genericData.borrowerName || '',
+                          date: genericData.date || ''
+                        };
+                        break;
+                      case 'DA2062':
+                        const da2062Data = receipt.data as any;
+                        displayInfo = {
+                          description: da2062Data.to || '',
+                          reference: da2062Data.handReceiptNumber || '',
+                          person: da2062Data.from || '',
+                          date: da2062Data.publicationDate || ''
+                        };
+                        break;
+                      case 'DA3161':
+                        const da3161Data = receipt.data as any;
+                        displayInfo = {
+                          description: `${da3161Data.transactionType || ''} Request`,
+                          reference: da3161Data.requestNumber || '',
+                          person: da3161Data.sendTo || '',
+                          date: da3161Data.dateRequired || ''
+                        };
+                        break;
+                      case 'OCIE':
+                        const ocieData = receipt.data as any;
+                        displayInfo = {
+                          description: `${ocieData.rankGrade || ''} ${ocieData.soldierName || ''}`.trim(),
+                          reference: ocieData.ssnPid || '',
+                          person: ocieData.unit || '',
+                          date: ocieData.reportDate || ''
+                        };
+                        break;
+                    }
+
+                    return (
                     <TableRow key={receipt.id} className="border-b border-border">
                       <TableCell>
                         <Checkbox
@@ -250,20 +356,22 @@ export const ReceiptLedger = ({ receipts, onBack, onDelete }: ReceiptLedgerProps
                           }}
                         />
                       </TableCell>
-                      <TableCell className="font-semibold">{receipt.itemName}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm font-mono">
-                        {receipt.serialNumber || "—"}
-                      </TableCell>
                       <TableCell>
-                        <span className="px-2 py-1 bg-primary/20 border border-primary/30 rounded text-xs text-primary font-bold uppercase">
-                          {receipt.category}
+                        <span className={`px-2 py-1 border rounded text-xs font-bold uppercase ${
+                          receipt.formType === 'DA2062' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                          receipt.formType === 'DA3161' ? 'bg-green-100 text-green-800 border-green-200' :
+                          receipt.formType === 'OCIE' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                          'bg-gray-100 text-gray-800 border-gray-200'
+                        }`}>
+                          {receipt.formType}
                         </span>
                       </TableCell>
-                      <TableCell className="font-medium">{receipt.borrowerName}</TableCell>
-                      <TableCell className="text-sm">{receipt.date}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {receipt.condition || "—"}
+                      <TableCell className="font-semibold">{displayInfo.description}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm font-mono">
+                        {displayInfo.reference || "—"}
                       </TableCell>
+                      <TableCell className="font-medium">{displayInfo.person}</TableCell>
+                      <TableCell className="text-sm">{displayInfo.date || "—"}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -275,7 +383,8 @@ export const ReceiptLedger = ({ receipts, onBack, onDelete }: ReceiptLedgerProps
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

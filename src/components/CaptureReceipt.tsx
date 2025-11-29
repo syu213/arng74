@@ -13,9 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Camera, Upload, ArrowLeft, Loader2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Receipt, RECEIPT_CATEGORIES } from "@/types/receipt";
+import { Receipt, FormType, FORM_TYPE_LABELS, RECEIPT_CATEGORIES } from "@/types/receipt";
 import { CameraCapture } from "./CameraCapture";
-import { geminiOCRService } from "@/services/gemini";
+import { enhancedFormDetectionService } from "@/services/enhancedFormDetection";
+import { storage } from "@/utils/storage";
 
 interface CaptureReceiptProps {
   onCancel: () => void;
@@ -24,19 +25,151 @@ interface CaptureReceiptProps {
 
 export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
   const { toast } = useToast();
+
+  // Create initial form data based on selected type
+  const createInitialFormData = (formType: FormType) => {
+    switch (formType) {
+      case 'Generic':
+        return {
+          itemName: "",
+          borrowerName: "",
+          date: "",
+          serialNumber: "",
+          category: "Other" as Receipt["category"],
+          condition: "",
+          notes: "",
+        };
+      case 'DA2062':
+        return {
+          handReceiptNumber: "",
+          from: "",
+          to: "",
+          publicationDate: "",
+          items: [],
+          page: "",
+          totalPages: ""
+        };
+      case 'DA3161':
+        return {
+          requestNumber: "",
+          voucherNumber: "",
+          sendTo: "",
+          dateRequired: "",
+          dodAAC: "",
+          priority: "",
+          requestFrom: "",
+          transactionType: "ISSUE",
+          items: [],
+          signature: "",
+          date: ""
+        };
+      case 'OCIE':
+        return {
+          soldierName: "",
+          rankGrade: "",
+          ssnPid: "",
+          unit: "",
+          cifCode: "",
+          reportDate: "",
+          items: [],
+          signature: "",
+          statementDate: ""
+        };
+      default:
+        return {
+          itemName: "",
+          borrowerName: "",
+          date: "",
+          serialNumber: "",
+          category: "Other" as Receipt["category"],
+          condition: "",
+          notes: "",
+        };
+    }
+  };
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [selectedFormType, setSelectedFormType] = useState<FormType>('Generic');
+  const [detectedFormType, setDetectedFormType] = useState<FormType | null>(null);
+  const [userManuallySelected, setUserManuallySelected] = useState(false);
   const [extractedData, setExtractedData] = useState({
-    itemName: "",
-    borrowerName: "",
-    date: "",
-    serialNumber: "",
-    category: "Other" as Receipt["category"],
-    condition: "",
-    notes: "",
+    formType: selectedFormType,
+    data: createInitialFormData(selectedFormType)
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Convert generic OCR data to specific form type structure
+  const convertGenericToFormType = (genericData: any, formType: FormType) => {
+    switch (formType) {
+      case 'DA2062':
+        return {
+          handReceiptNumber: genericData.serialNumber || '',
+          from: '', // Will need to be filled manually
+          to: genericData.borrowerName || '',
+          publicationDate: genericData.date || '',
+          items: genericData.itemName ? [{
+            stockNumber: genericData.serialNumber || '',
+            itemDescription: genericData.itemName || '',
+            model: '',
+            securityCode: '',
+            unitOfIssue: '',
+            quantityAuth: 1,
+            quantities: { A: 1, B: 0, C: 0, D: 0, E: 0, F: 0 }
+          }] : [],
+          page: '',
+          totalPages: ''
+        };
+      case 'DA3161':
+        return {
+          requestNumber: genericData.serialNumber || '',
+          voucherNumber: '',
+          sendTo: '', // Will need to be filled manually
+          dateRequired: genericData.date || '',
+          dodAAC: '',
+          priority: '',
+          requestFrom: genericData.borrowerName || '',
+          transactionType: 'ISSUE',
+          items: genericData.itemName ? [{
+            itemNumber: 1,
+            stockNumber: genericData.serialNumber || '',
+            itemDescription: genericData.itemName || '',
+            unitOfIssue: '',
+            quantity: 1,
+            code: '',
+            supplyAction: '',
+            unitPrice: 0,
+            totalCost: 0
+          }] : [],
+          signature: '',
+          date: genericData.date || ''
+        };
+      case 'OCIE':
+        return {
+          soldierName: genericData.borrowerName || '',
+          rankGrade: '', // Extract from borrowerName if it contains rank
+          ssnPid: genericData.serialNumber || '',
+          unit: '', // Will need to be filled manually
+          cifCode: '',
+          reportDate: genericData.date || '',
+          items: genericData.itemName ? [{
+            issuingCif: '',
+            lin: '',
+            size: '',
+            nomenclature: genericData.itemName || '',
+            nsn: genericData.serialNumber || '',
+            onHandQty: 1,
+            pcsTrans: false,
+            etsTrans: false
+          }] : [],
+          signature: '',
+          statementDate: genericData.date || ''
+        };
+      default:
+        return genericData;
+    }
+  };
 
   const processImage = async (file: File) => {
     setIsProcessing(true);
@@ -49,26 +182,42 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
     reader.readAsDataURL(file);
 
     try {
-      // Perform OCR with Gemini API
-      const extractedData = await geminiOCRService.extractDataFromImage(file);
-      console.log("Gemini OCR Result:", extractedData);
+      // Perform enhanced form detection and extraction
+      const ocrResult = await enhancedFormDetectionService.extractDataFromImage(file);
+      console.log("Enhanced Form Detection Result:", ocrResult);
 
-      setExtractedData({
-        itemName: extractedData.itemName || "",
-        borrowerName: extractedData.borrowerName || "",
-        date: extractedData.date || "",
-        serialNumber: extractedData.serialNumber || "",
-        category: (extractedData.category as Receipt["category"]) || "Other",
-        condition: extractedData.condition || "",
-        notes: extractedData.notes || "",
-      });
+      setDetectedFormType(ocrResult.formType);
 
-      toast({
-        title: "AI OCR Complete",
-        description: "Data extracted using Gemini AI. Please review and edit.",
-      });
+      // Only override user selection if they haven't manually selected a form type
+      // or if the detected form matches what they manually selected
+      if (!userManuallySelected || selectedFormType === ocrResult.formType) {
+        setSelectedFormType(ocrResult.formType);
+        // Set extracted data based on detected form type
+        setExtractedData({
+          formType: ocrResult.formType,
+          data: ocrResult.data
+        });
+
+        toast({
+          title: `${FORM_TYPE_LABELS[ocrResult.formType]} Detected`,
+          description: `Form detected and data extracted using AI. Please review and edit.`,
+        });
+      } else {
+        // User manually selected a different form type - convert generic OCR data to match their selection
+        const convertedData = convertGenericToFormType(ocrResult.data, selectedFormType);
+
+        setExtractedData({
+          formType: selectedFormType,
+          data: convertedData
+        });
+
+        toast({
+          title: `${FORM_TYPE_LABELS[selectedFormType]} Selected`,
+          description: `Using your manually selected form type. OCR data mapped to form fields.`,
+        });
+      }
     } catch (error) {
-      console.error("Gemini OCR Error:", error);
+      console.error("Enhanced Form Detection Error:", error);
       toast({
         title: "AI OCR Failed",
         description: error instanceof Error ? error.message : "Could not extract data. Please enter manually.",
@@ -76,14 +225,18 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
       });
 
       // Reset to empty state on error
+      setDetectedFormType(null);
       setExtractedData({
-        itemName: "",
-        borrowerName: "",
-        date: "",
-        serialNumber: "",
-        category: "Other" as Receipt["category"],
-        condition: "",
-        notes: "",
+        formType: selectedFormType,
+        data: {
+          itemName: "",
+          borrowerName: "",
+          date: "",
+          serialNumber: "",
+          category: "Other",
+          condition: "",
+          notes: "",
+        }
       });
     } finally {
       setIsProcessing(false);
@@ -119,10 +272,40 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
   };
 
   const handleSave = () => {
-    if (!extractedData.itemName || !extractedData.borrowerName || !extractedData.date || !extractedData.category) {
+    // Validate based on form type
+    const missingFields: string[] = [];
+
+    if (extractedData.formType === 'Generic') {
+      const genericData = extractedData.data as { itemName: string; borrowerName: string; date: string; category: string; };
+      if (!genericData.itemName) missingFields.push('Item Name');
+      if (!genericData.borrowerName) missingFields.push('Borrower Name');
+      if (!genericData.date) missingFields.push('Date');
+      if (!genericData.category) missingFields.push('Category');
+    } else if (extractedData.formType === 'DA2062') {
+      const da2062Data = extractedData.data as any;
+      // Only require recipient name - the other fields can be filled later
+      if (!da2062Data.to) missingFields.push('Recipient Name (TO:)');
+      // Don't require from, handReceiptNumber for auto-extraction since they may not be visible
+    } else if (extractedData.formType === 'DA3161') {
+      const da3161Data = extractedData.data as any;
+      if (!da3161Data.sendTo) missingFields.push('Send To Unit');
+      if (!da3161Data.requestFrom) missingFields.push('Request From Unit');
+      if (!da3161Data.requestNumber) missingFields.push('Request Number');
+    } else if (extractedData.formType === 'OCIE') {
+      const ocieData = extractedData.data as any;
+      if (!ocieData.soldierName) missingFields.push('Soldier Name');
+      if (!ocieData.rankGrade) missingFields.push('Rank/Grade');
+      if (!ocieData.ssnPid) missingFields.push('SSN/PID');
+      if (!ocieData.unit) missingFields.push('Unit');
+    } else {
+      // For specific Army forms, we'll rely on form-specific validation
+      // For now, just check if photo exists
+    }
+
+    if (missingFields.length > 0) {
       toast({
         title: "Missing Data",
-        description: "Please fill in all required fields (item, borrower, date, category).",
+        description: `Please fill in: ${missingFields.join(', ')}.`,
         variant: "destructive",
       });
       return;
@@ -139,21 +322,17 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
 
     const receipt: Receipt = {
       id: `receipt-${Date.now()}`,
-      itemName: extractedData.itemName,
-      borrowerName: extractedData.borrowerName,
-      date: extractedData.date,
+      formType: extractedData.formType,
       photoUrl: photoPreview,
       timestamp: Date.now(),
-      serialNumber: extractedData.serialNumber || undefined,
-      category: extractedData.category,
-      condition: extractedData.condition || undefined,
-      notes: extractedData.notes || undefined,
+      data: extractedData.data,
+      notes: extractedData.data.notes
     };
 
     onSave(receipt);
     toast({
       title: "Receipt Saved",
-      description: "Hand receipt successfully logged.",
+      description: `${FORM_TYPE_LABELS[extractedData.formType]} successfully logged.`,
     });
   };
 
@@ -165,11 +344,57 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
-          <h1 className="text-xl font-bold text-foreground">Capture Hand Receipt</h1>
+          <h1 className="text-xl font-bold text-foreground">Capture Army Form</h1>
+          <p className="text-sm text-muted-foreground font-semibold mt-1">
+            {detectedFormType ? `🎯 ${FORM_TYPE_LABELS[detectedFormType]} Detected` : '📷 Select form type or let AI detect automatically'}
+          </p>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-2xl">
+        {/* Form Type Selection Section */}
+        <Card className="p-6 mb-6 bg-card border-2 border-border shadow-[var(--shadow-tactical)]">
+          <h2 className="text-lg font-bold text-foreground mb-4 uppercase tracking-wider">Form Type</h2>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="formType">Select Form Type</Label>
+              <Select
+                value={selectedFormType}
+                onValueChange={(value) => {
+                  setSelectedFormType(value as FormType);
+                  setUserManuallySelected(true);
+                  // Reset extracted data when form type changes
+                  setExtractedData({
+                    formType: value as FormType,
+                    data: createInitialFormData(value as FormType)
+                  });
+                  // Clear detected form type if user manually selects
+                  if (detectedFormType) {
+                    setDetectedFormType(null);
+                  }
+                }}
+                disabled={isProcessing}
+              >
+                <SelectTrigger id="formType" className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(FORM_TYPE_LABELS) as FormType[]).map((formType) => (
+                    <SelectItem key={formType} value={formType}>
+                      {FORM_TYPE_LABELS[formType]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {detectedFormType && (
+                <p className="text-xs text-primary mt-2 font-semibold">
+                  ✅ Form automatically detected. Change selection if needed.
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
         {/* Photo Capture Section */}
         <Card className="p-6 mb-6 bg-card border-2 border-border shadow-[var(--shadow-tactical)]">
           <h2 className="text-lg font-bold text-foreground mb-4 uppercase tracking-wider">Step 1: Capture Photo</h2>
@@ -243,94 +468,225 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
         {photoPreview && !isProcessing && (
           <Card className="p-6 bg-card border-2 border-border shadow-[var(--shadow-tactical)]">
             <h2 className="text-lg font-bold text-foreground mb-4 uppercase tracking-wider">Step 2: Review & Edit Data</h2>
-            
+
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="itemName">Item Name / Description *</Label>
-                <Input
-                  id="itemName"
-                  value={extractedData.itemName}
-                  onChange={(e) => setExtractedData({ ...extractedData, itemName: e.target.value })}
-                  placeholder="e.g., M4 Rifle, SINCGARS Radio"
-                  className="mt-1"
-                />
-              </div>
+              {selectedFormType === 'Generic' ? (
+                // Generic receipt form (original functionality)
+                <>
+                  <div>
+                    <Label htmlFor="itemName">Item Name / Description *</Label>
+                    <Input
+                      id="itemName"
+                      value={(extractedData.data as any).itemName || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, itemName: e.target.value }
+                      })}
+                      placeholder="e.g., M4 Rifle, SINCGARS Radio"
+                      className="mt-1"
+                    />
+                  </div>
 
-              <div>
-                <Label htmlFor="borrowerName">Borrower Name *</Label>
-                <Input
-                  id="borrowerName"
-                  value={extractedData.borrowerName}
-                  onChange={(e) => setExtractedData({ ...extractedData, borrowerName: e.target.value })}
-                  placeholder="e.g., SGT John Smith"
-                  className="mt-1"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="borrowerName">Borrower Name *</Label>
+                    <Input
+                      id="borrowerName"
+                      value={(extractedData.data as any).borrowerName || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, borrowerName: e.target.value }
+                      })}
+                      placeholder="e.g., SGT John Smith"
+                      className="mt-1"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="date">Date *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={extractedData.date}
-                    onChange={(e) => setExtractedData({ ...extractedData, date: e.target.value })}
-                    className="mt-1"
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="date">Date *</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={(extractedData.data as any).date || ''}
+                        onChange={(e) => setExtractedData({
+                          ...extractedData,
+                          data: { ...extractedData.data, date: e.target.value }
+                        })}
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="category">Category *</Label>
+                      <Select
+                        value={(extractedData.data as any).category || 'Other'}
+                        onValueChange={(value) => setExtractedData({
+                          ...extractedData,
+                          data: { ...extractedData.data, category: value }
+                        })}
+                      >
+                        <SelectTrigger id="category" className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RECEIPT_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="serialNumber">Serial Number / NSN</Label>
+                    <Input
+                      id="serialNumber"
+                      value={(extractedData.data as any).serialNumber || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, serialNumber: e.target.value }
+                      })}
+                      placeholder="e.g., W123456789, 1005-01-231-0001"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="condition">Condition</Label>
+                    <Input
+                      id="condition"
+                      value={(extractedData.data as any).condition || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, condition: e.target.value }
+                      })}
+                      placeholder="e.g., Serviceable, Damaged, Missing parts"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Additional Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={(extractedData.data as any).notes || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, notes: e.target.value }
+                      })}
+                      placeholder="Any additional information..."
+                      className="mt-1 min-h-[80px]"
+                    />
+                  </div>
+                </>
+              ) : selectedFormType === 'DA2062' ? (
+                // DA 2062 Hand Receipt form fields
+                <>
+                  <div>
+                    <Label htmlFor="handReceiptNumber">Hand Receipt/Annex Number</Label>
+                    <Input
+                      id="handReceiptNumber"
+                      value={(extractedData.data as any).handReceiptNumber || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, handReceiptNumber: e.target.value }
+                      })}
+                      placeholder="e.g., 1234-1"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="from">From (Issuing Unit)</Label>
+                    <Input
+                      id="from"
+                      value={(extractedData.data as any).from || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, from: e.target.value }
+                      })}
+                      placeholder="e.g., HHC 337th EN BN"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="to">To (Recipient Name)</Label>
+                    <Input
+                      id="to"
+                      value={(extractedData.data as any).to || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, to: e.target.value }
+                      })}
+                      placeholder="e.g., SGT John Smith"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="publicationDate">Publication Date</Label>
+                    <Input
+                      id="publicationDate"
+                      type="date"
+                      value={(extractedData.data as any).publicationDate || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: { ...extractedData.data, publicationDate: e.target.value }
+                      })}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="items">Items</Label>
+                    <Textarea
+                      id="items"
+                      value={(extractedData.data as any).items?.map((item: any) =>
+                        `${item.itemDescription || item.nomenclature || 'Item'}${item.stockNumber || item.nsn ? ' (' + (item.stockNumber || item.nsn) + ')' : ''}`
+                      ).join('\n') || ''}
+                      onChange={(e) => setExtractedData({
+                        ...extractedData,
+                        data: {
+                          ...extractedData.data,
+                          items: e.target.value.split('\n').map((line: string) => ({
+                            stockNumber: '',
+                            itemDescription: line,
+                            model: '',
+                            securityCode: '',
+                            unitOfIssue: 'EA',
+                            quantityAuth: 1,
+                            quantities: { A: 1, B: 0, C: 0, D: 0, E: 0, F: 0 }
+                          }))
+                        }
+                      })}
+                      placeholder="e.g., M4 Carbine (1005-01-231-0001), PEQ-15 Laser, ACH Helmet"
+                      className="mt-1 min-h-[120px]"
+                    />
+                  </div>
+                </>
+              ) : (
+                // Other Army-specific forms (placeholder for Phase 2)
+                <div className="text-center py-8">
+                  <div className="mb-4 text-lg font-bold text-primary">
+                    {FORM_TYPE_LABELS[selectedFormType]}
+                  </div>
+                  <p className="text-muted-foreground mb-4">
+                    Form-specific data entry coming in Phase 2.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    For now, the AI-extracted data will be saved as-is.
+                  </p>
+                  <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
+                    <h3 className="text-sm font-bold mb-2 uppercase">Extracted Data Preview:</h3>
+                    <pre className="text-xs text-left bg-background p-2 rounded border overflow-auto max-h-40">
+                      {JSON.stringify(extractedData.data, null, 2)}
+                    </pre>
+                  </div>
                 </div>
-
-                <div>
-                  <Label htmlFor="category">Category *</Label>
-                  <Select
-                    value={extractedData.category}
-                    onValueChange={(value) => setExtractedData({ ...extractedData, category: value as Receipt["category"] })}
-                  >
-                    <SelectTrigger id="category" className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RECEIPT_CATEGORIES.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="serialNumber">Serial Number / NSN</Label>
-                <Input
-                  id="serialNumber"
-                  value={extractedData.serialNumber}
-                  onChange={(e) => setExtractedData({ ...extractedData, serialNumber: e.target.value })}
-                  placeholder="e.g., W123456789, 1005-01-231-0001"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="condition">Condition</Label>
-                <Input
-                  id="condition"
-                  value={extractedData.condition}
-                  onChange={(e) => setExtractedData({ ...extractedData, condition: e.target.value })}
-                  placeholder="e.g., Serviceable, Damaged, Missing parts"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="notes">Additional Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={extractedData.notes}
-                  onChange={(e) => setExtractedData({ ...extractedData, notes: e.target.value })}
-                  placeholder="Any additional information..."
-                  className="mt-1 min-h-[80px]"
-                />
-              </div>
+              )}
 
               <Button
                 onClick={handleSave}
@@ -338,7 +694,7 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
                 size="lg"
               >
                 <CheckCircle className="mr-2 h-5 w-5" />
-                Save Receipt
+                Save {FORM_TYPE_LABELS[selectedFormType]}
               </Button>
             </div>
           </Card>
