@@ -100,6 +100,41 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper function to update OCIE items
+  const updateOCIEItem = (index: number, field: string, value: any) => {
+    const currentData = extractedData.data as any;
+    const updatedItems = [...(currentData.items || [])];
+
+    if (!updatedItems[index]) {
+      updatedItems[index] = {};
+    }
+
+    // Handle nested updates
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [parent]: {
+          ...(updatedItems[index]?.[parent] || {}),
+          [child]: value
+        }
+      };
+    } else {
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value
+      };
+    }
+
+    setExtractedData({
+      ...extractedData,
+      data: {
+        ...currentData,
+        items: updatedItems
+      }
+    });
+  };
+
   // Convert generic OCR data to specific form type structure
   const convertGenericToFormType = (genericData: any, formType: FormType) => {
     switch (formType) {
@@ -667,6 +702,308 @@ export const CaptureReceipt = ({ onCancel, onSave }: CaptureReceiptProps) => {
                     />
                   </div>
                 </>
+              ) : selectedFormType === 'OCIE' ? (
+                // Enhanced OCIE Record form
+                <div className="space-y-6">
+                  {/* Header Section */}
+                  <div className="border border-border rounded-lg p-4 bg-card">
+                    <h3 className="text-sm font-bold mb-3 uppercase tracking-wider">Soldier Information</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="soldierName">Soldier Name *</Label>
+                        <Input
+                          id="soldierName"
+                          value={(extractedData.data as any).soldierName || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, soldierName: e.target.value }
+                          })}
+                          placeholder="Last, First Middle"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="rankGrade">Rank/Grade *</Label>
+                        <Input
+                          id="rankGrade"
+                          value={(extractedData.data as any).rankGrade || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, rankGrade: e.target.value }
+                          })}
+                          placeholder="SGT/E-5"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ssnPid">SSN/PID *</Label>
+                        <Input
+                          id="ssnPid"
+                          value={(extractedData.data as any).ssnPid || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, ssnPid: e.target.value }
+                          })}
+                          placeholder="Last 4 digits or DOD ID"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="unit">Unit *</Label>
+                        <Input
+                          id="unit"
+                          value={(extractedData.data as any).unit || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, unit: e.target.value }
+                          })}
+                          placeholder="HHC 337th EN BN"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="cifCode">CIF Code</Label>
+                        <Input
+                          id="cifCode"
+                          value={(extractedData.data as any).cifCode || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, cifCode: e.target.value }
+                          })}
+                          placeholder="G3MS00"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="reportDate">Report Date</Label>
+                        <Input
+                          id="reportDate"
+                          type="date"
+                          value={(extractedData.data as any).reportDate || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, reportDate: e.target.value }
+                          })}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Section */}
+                  <div className="border border-border rounded-lg p-4 bg-card">
+                    <h3 className="text-sm font-bold mb-3 uppercase tracking-wider">Equipment Items</h3>
+                    <div className="space-y-4">
+                      {(extractedData.data as any).items?.length > 0 ? (
+                        (extractedData.data as any).items.map((item: any, index: number) => (
+                          <div key={index} className="border border-border rounded-lg p-3 bg-muted/20">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="text-sm font-semibold">Item {index + 1}</h4>
+                              {item.confidence && (
+                                <div className="text-xs px-2 py-1 rounded-full bg-primary/20 text-foreground">
+                                  {item.confidence.overall}% confidence
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-2 mb-2">
+                              <div>
+                                <Label className="text-xs">LIN</Label>
+                                <Input
+                                  value={item.lin || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'lin', e.target.value)}
+                                  className="text-xs h-8"
+                                  placeholder="B05008"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Size</Label>
+                                <Input
+                                  value={item.size || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'size', e.target.value)}
+                                  className="text-xs h-8"
+                                  placeholder="LRG OCP TAN"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Partial NSN</Label>
+                                <Input
+                                  value={item.partialNsn || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'partialNsn', e.target.value)}
+                                  className="text-xs h-8"
+                                  placeholder="1016"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">NSN</Label>
+                                <Input
+                                  value={item.nsn || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'nsn', e.target.value)}
+                                  className="text-xs h-8"
+                                  placeholder="8415-01-530-0000"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mb-2">
+                              <Label className="text-xs">Nomenclature</Label>
+                              <Input
+                                value={item.nomenclature || ''}
+                                onChange={(e) => updateOCIEItem(index, 'nomenclature', e.target.value)}
+                                className="text-xs"
+                                placeholder="BODY ARMOR FRAGMENTATION PROTECTION"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 mb-2">
+                              <div>
+                                <Label className="text-xs">Auth Qty</Label>
+                                <Input
+                                  type="number"
+                                  value={item.quantities?.authorized || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'quantities', {
+                                    ...item.quantities,
+                                    authorized: parseInt(e.target.value) || 0
+                                  })}
+                                  className="text-xs h-8"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">OH Qty</Label>
+                                <Input
+                                  type="number"
+                                  value={item.quantities?.onHand || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'quantities', {
+                                    ...item.quantities,
+                                    onHand: parseInt(e.target.value) || 0
+                                  })}
+                                  className="text-xs h-8 font-bold text-primary"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Due Out</Label>
+                                <Input
+                                  type="number"
+                                  value={item.quantities?.dueOut || ''}
+                                  onChange={(e) => updateOCIEItem(index, 'quantities', {
+                                    ...item.quantities,
+                                    dueOut: parseInt(e.target.value) || 0
+                                  })}
+                                  className="text-xs h-8"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                              <label className="flex items-center text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={item.flags?.pcsTrans || false}
+                                  onChange={(e) => updateOCIEItem(index, 'flags', {
+                                    ...item.flags,
+                                    pcsTrans: e.target.checked
+                                  })}
+                                  className="mr-1"
+                                />
+                                PCS TRANS
+                              </label>
+                              <label className="flex items-center text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={item.flags?.etsTrans || false}
+                                  onChange={(e) => updateOCIEItem(index, 'flags', {
+                                    ...item.flags,
+                                    etsTrans: e.target.checked
+                                  })}
+                                  className="mr-1"
+                                />
+                                ETS TRANS
+                              </label>
+                            </div>
+
+                            {/* Validation Issues */}
+                            {item.issues?.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {item.issues.map((issue: string, issueIndex: number) => (
+                                  <div key={issueIndex} className="text-xs px-2 py-1 bg-destructive/20 text-destructive rounded">
+                                    ⚠️ {issue}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          No equipment items found. This could indicate an OCR issue.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* OCR Warnings */}
+                  {(extractedData.data as any).extractionWarnings?.length > 0 && (
+                    <div className="border border-destructive/50 rounded-lg p-4 bg-destructive/10">
+                      <h3 className="text-sm font-bold mb-2 uppercase tracking-wider text-destructive">OCR Warnings</h3>
+                      <ul className="text-xs space-y-1">
+                        {(extractedData.data as any).extractionWarnings.map((warning: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-destructive mr-2">⚠️</span>
+                            {warning}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Footer Information */}
+                  <div className="border border-border rounded-lg p-4 bg-card">
+                    <h3 className="text-sm font-bold mb-3 uppercase tracking-wider">Verification</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="totalValue">Total Value</Label>
+                        <Input
+                          id="totalValue"
+                          type="number"
+                          step="0.01"
+                          value={(extractedData.data as any).totalValue || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, totalValue: parseFloat(e.target.value) || 0 }
+                          })}
+                          placeholder="12437.56"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="statementDate">Statement Date</Label>
+                        <Input
+                          id="statementDate"
+                          type="date"
+                          value={(extractedData.data as any).statementDate || ''}
+                          onChange={(e) => setExtractedData({
+                            ...extractedData,
+                            data: { ...extractedData.data, statementDate: e.target.value }
+                          })}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <Label htmlFor="signature">Signature</Label>
+                      <Input
+                        id="signature"
+                        value={(extractedData.data as any).signatureText || ''}
+                        onChange={(e) => setExtractedData({
+                          ...extractedData,
+                          data: { ...extractedData.data, signatureText: e.target.value }
+                        })}
+                        placeholder="Signature line text"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
               ) : (
                 // Other Army-specific forms (placeholder for Phase 2)
                 <div className="text-center py-8">

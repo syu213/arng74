@@ -58,26 +58,66 @@ export interface DA3161Item {
 
 // OCIE Record - Automated DA Form 3645
 export interface OCIEReceipt {
+  // Header Information
   soldierName: string;
   rankGrade: string;
+  dodId: string;
   ssnPid: string;
   unit: string;
   cifCode: string;
   reportDate: string;
+
+  // Line Items
   items: OCIEItem[];
-  signature?: string;
+
+  // Footer/Verification
+  totalValue?: number;
+  isSigned: boolean;
+  signatureText?: string;
   statementDate?: string;
+
+  // OCR Metadata
+  ocrConfidence: OCRConfidence;
+  extractionWarnings?: string[];
 }
 
 export interface OCIEItem {
-  issuingCif: string;
-  lin: string;
-  size: string;
-  nomenclature: string;
-  nsn: string;
-  onHandQty: number;
-  pcsTrans: boolean;
-  etsTrans: boolean;
+  id: string;
+  // Table Columns
+  issuingCif: string;          // Column 1: ISSUING CIF
+  lin: string;                 // Column 2: LIN (Line Item Number)
+  size: string;                // Column 3: SIZE
+  nomenclature: string;         // Column 4: NOMENCLATURE (Item Description)
+  edition?: string;            // Column 5: EDITION (if present)
+  fig?: string;                // Column 6: FIG (Figure number)
+  withPc?: string;             // Column 7: W/PC (With/Without Component)
+  partialNsn: string;          // Column 8: PARTIAL NSN (first 4 digits)
+  nsn: string;                 // Full 13-digit National Stock Number
+
+  // Quantity Information
+  quantities: {
+    authorized: number;         // AUTH QTY
+    onHand: number;            // OH QTY (On-Hand Quantity)
+    dueOut: number;            // DUE OUT
+  };
+
+  // Transfer Flags
+  flags: {
+    pcsTrans: boolean;         // PCS TRANS (Permanent Change of Station)
+    etsTrans: boolean;         // ETS TRANS (Expiration of Term of Service)
+  };
+
+  // OCR Validation
+  confidence: OCRConfidence;
+  issues: string[];           // Data quality issues (e.g., 'NSN format invalid')
+}
+
+// OCR confidence scoring
+export interface OCRConfidence {
+  overall: number;            // 0-100 overall confidence
+  header: number;             // Header extraction confidence
+  items: number;              // Line items extraction confidence
+  fields: Record<string, number>; // Per-field confidence scores
 }
 
 // Generic receipt data (for backward compatibility)

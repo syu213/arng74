@@ -99,10 +99,23 @@ export class GeminiOCRService {
 You are analyzing a U.S. Army National Guard form (DA 2062, DA 3161, OCIE, or other military document) for equipment accountability.
 Carefully examine this form and extract the requested information in precise JSON format.
 
+IMPORTANT: This form may contain HANDWRITTEN text. Pay extra attention to:
+- NAME fields with handwritten entries
+- RANK/GRADE fields
+- SSN/PID fields
+- Any signatures or printed text
+
+OCR HANDWRITING INSTRUCTIONS:
+1. Focus on printed form labels first (NAME:, RANK/GRADE:, etc.)
+2. For handwritten entries, try multiple interpretations if unclear
+3. Look for dark ink, pen strokes, and character shapes
+4. If handwriting is very light, indicate "illegible" in notes
+
 Please identify and extract:
 1. The equipment/item being transferred
 2. The service member(s) and units involved - pay special attention to ranks and names
 3. Transaction details and identifiers
+4. ALL visible text from headers, labels, and any readable handwritten entries
 
 Return ONLY a JSON object with these exact fields:
 
@@ -113,7 +126,7 @@ Return ONLY a JSON object with these exact fields:
   "serialNumber": "Serial number, NSN (National Stock Number), or unique identifier",
   "category": "Choose one: Weapons, Optics, Radios/Comms, PPE, Tools, Vehicles, Medical, Other",
   "condition": "Equipment condition (Serviceable, Damaged, Missing parts, etc.)",
-  "notes": "Additional remarks, quantities, or special instructions"
+  "notes": "Additional remarks, quantities, special instructions, OR note if handwriting is illegible"
 }
 
 NAME EXTRACTION PRIORITY:
@@ -135,10 +148,11 @@ MILITARY EQUIPMENT EXAMPLES:
 ANALYSIS GUIDELINES:
 - Extract serial numbers and NSNs (typically 13-digit format like 1005-01-231-0001)
 - Find dates in various formats and convert to MM/DD/YYYY
+- For HANDWRITTEN text: If completely illegible, put "illegible handwriting" in notes field
 - For missing information, use empty string ""
 - Respond with JSON only - no explanations or markdown formatting
 
-Carefully analyze all text, form fields, headers, and signature blocks.
+Carefully analyze all text, form fields, headers, and any handwritten entries in image.
     `;
 
     // Try different model names
